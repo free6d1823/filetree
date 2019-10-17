@@ -1,2 +1,4 @@
 # filetree
-List files as a tree
+Parse a folder and demo a tree file structure
+
+Using gcc C++ 11
