@@ -2,102 +2,142 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <dirent.h>
+//////////////////////////////////////////////////////////////////////////////
+// File utilities
 
-FileNode::FileNode(const char* name, int isFile, long time, long size):
-        mParent(0),mPrev(0), mNext(0), mFirst(0), mLast(0)
+int stateFile(const char* path, bool* isDir, long* lastTime, long* fileSize)
+{
+    int ret = 0;
+    struct stat buf;
+    ret = stat(path, &buf);
+    if (ret != 0) {
+fprintf(stderr, "state file %s error %d!\n", path, ret);
+        return ret;
+    }
+    *isDir = ((buf.st_mode & S_IFDIR) != 0);
+    *lastTime = buf.st_mtime;
+    *fileSize = buf.st_size;
+    return 0;
+}
+int findFiles(const char* path, FileNode* node)
+{
+    int c = 0;
+    bool isDir;
+    long tm;
+    long size;
+    char pathname[512];
+    DIR *d;
+    struct dirent *att;
+    d = opendir(path);
+    if (d) {
+        while ((att = readdir(d)) != NULL) {
+            if (strcmp(att->d_name, ".") == 0) continue;
+            if (strcmp(att->d_name, "..") == 0) continue;
+            sprintf(pathname, "%s/%s", path, att->d_name);
+
+            if( 0!= stateFile(pathname, &isDir, &tm, &size))
+                continue;
+
+            c++;
+
+            FileNode* f1  = node->appendChild(new FileNode(pathname, isDir, tm, size));
+
+            if (f1->isFolder() ){
+
+                c+=findFiles(pathname, f1);
+            }
+        }
+        closedir(d);
+    }
+
+    return c;
+
+}
+//////////////////////////////////////////////////////////////////////////////
+FileNode::FileNode(const char* name, bool  isFolder, long time, long size):
+        Tree()
 {
     if(name)
         mName = strdup(name);
     else
         mName = strdup("");
+
     mTime = time;
     mSize = size;
-    mIsFile = isFile;
-    mDepth = 0;
-
+    mIsFolder = isFolder;
+        
 }
+
 
 FileNode::~FileNode()
 {
     if (mName) 
         free(mName);
+    
+
+}
+const char* FileNode::getFilePathName()
+{
+    return mName;
+}
+const char* FileNode::getFileName()
+{
+    if (!mName)
+        return NULL;
+    char* p1 = strrchr(mName, '/');
+    if(!p1) return mName;
+    return p1+ 1;
 }
 void FileNode::print(int opt)
 {
     for (int i=0; i< mDepth; i++)
-        printf("  ");
+        printf(" ");
+
     if (opt) //long display        
-        printf("%s %ld %ldKB\n", mName, mTime, mSize); 
+    {
+        struct tm* tc = localtime((time_t*)&mTime);
+
+        if(!mIsFolder){
+            printf("  %s\t %4d/%02d/%02d %02d:%02d:%02d %ldB\n", mName, tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
+                    tc->tm_hour, tc->tm_min, tc->tm_sec, mSize); 
+        }
+        else {
+            printf("+ %s\t  %4d/%02d/%02d %02d:%02d:%02d\n", mName, tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
+                    tc->tm_hour, tc->tm_min, tc->tm_sec);
+        }
+    }
     else
-        printf("%s\n", mName);
-    FileNode* fd = mFirst;
+    {
+        if(!mIsFolder) {
+            printf("  %s\n", mName);
+        }
+        else
+            printf("+ %s\n", mName);
+    }
+    FileNode* fd = (FileNode*) mFirst;
     while (fd){
         fd->print(opt);
-        fd =fd->mNext;
+        fd =(FileNode*)fd->mNext;
     }
 }
-int FileNode::getDepth()
-{
-    return mDepth;
+
+bool FileNode::isFolder() {
+    return (mIsFolder);
 }
 
-void FileNode::setDepth(int depth)
-{
-    mDepth = depth;
-}
-    /* append a node after current child */
+
+/* append a node after current child */
 FileNode* FileNode::appendChild(FileNode* node)
 {
-    if (NULL == node || node->mParent || node->mPrev || node->mNext)
-        return NULL;
-    node->mParent = this;
-    node->mPrev = mLast;
-    node->mNext = NULL;    
-
-    if(mLast == NULL) {
-        mFirst = node;
-    } else {
-        mLast->mNext = node;
-    }
-    mLast = node; 
-    node->mDepth = mDepth +1;
-
-    return node;
+    return (FileNode*) Tree::appendChild( node);
 }
-FileNode* FileNode::appendChild(const char* name, int isFile, long time, long size)
+  
+FileNode* FileNode::search(const char* name)
 {
-    return appendChild( new FileNode(name, isFile, time, size));
-}
-
-int FileNode::children()
-{
-    int c = 0;
-    FileNode* nd = mFirst;
-    while (nd){
-        c++;
-        nd = nd->mNext;
-    }
-    return c;
-}
-
-///////////////////////////////////////////////////
-
-FileTree::FileTree(FileNode* root)
-{
-    mRoot = root;
-    mRoot->mParent = nullptr;
-}
-FileTree::~FileTree(){
-   if (mRoot)
-       delete mRoot;
-}
-FileNode* FileTree::getRoot()
-{
-    return mRoot;
-}
-void FileTree::print(int opt){
-        if(mRoot)
-            mRoot->print(opt);
-        printf("\n");
+    return NULL;
 }
 
