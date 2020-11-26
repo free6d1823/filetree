@@ -3,6 +3,24 @@
 #include <string.h>
 #include "tree.h"
 
+Link::Link(void* data): mPrev(0), mNext(0)
+{
+	mData = data;
+}
+Link::~Link(){
+	if (mNext)
+		delete mNext;
+	mNext = NULL;
+}
+Link* Link::append(void* data)
+{
+	Link* ln = new Link(data);
+	mNext = ln;
+	ln->mPrev = this;
+	return ln;
+}
+
+
 Tree::Tree():
         mParent(0),mPrev(0), mNext(0), mFirst(0), mLast(0), mDepth(0)
 {}

@@ -1,5 +1,5 @@
-TARGET_NAME = tree
-OBJS =   test.o filetree.o tree.o
+TARGET_NAME = merge
+OBJS =   diff.o filetree.o tree.o
 
 ifeq ($(BUILD_MODE),debug)
 	CFLAGS += -g

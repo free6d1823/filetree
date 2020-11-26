@@ -29,4 +29,13 @@ protected:
     Tree* mLast;
     int mDepth;
 };
+class Link{
+public:
+	Link(void* data);
+	~Link();
+	Link* append(void* data);
+	Link* mPrev;
+	Link* mNext;
+	void* mData;
+};
 #endif //TREE_H

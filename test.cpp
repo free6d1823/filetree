@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 
     FileNode* rootFn = new FileNode(pFolder, isDir, tm, size);
 
-    int nFile = findFiles(pFolder, rootFn);
+    int nFile = expandFiles(pFolder, rootFn);
 
     rootFn->print(1);
     printf("Total %d files\n", nFile);
