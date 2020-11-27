@@ -32,7 +32,7 @@ int FileNode::expand()
     long size;
     DIR *d;
     struct dirent *att;
-	char* currentFolder = getFilePathName();
+	char* currentFolder = createFilePathName();
 	char pathname[512];
 	if (currentFolder) {
     	d = opendir(currentFolder);	
@@ -105,7 +105,7 @@ FileNode::~FileNode()
 
 }
 /* free the pointer after used */
-char* FileNode::getFilePathName()
+char* FileNode::createFilePathName()
 {
 	Link* pFirst = new Link(this);
 	Link* pLast = pFirst;
@@ -135,33 +135,37 @@ char* FileNode::getFilePathName()
     return buffer;
 }
 //exclude root folder
-char* FileNode::getRelativePathName()
+char* FileNode::createRelativePathName()
 {
+	if(mParent == NULL)
+		return NULL;
+	FileNode* pNode = (FileNode*)mParent;
 	Link* pFirst = new Link(this);
 	Link* pLast = pFirst;
-	int length = strlen(mName) + 1;;
-	FileNode* pParent = (FileNode*)mParent;
-	while(pParent){
-		if (!pParent->mParent)
-			break;
-		pLast = pLast->append(pParent);
-		length += strlen(pParent->mName) + 1;
+	int length = strlen(mName) + 1;
 	
-		pParent = (FileNode*) pParent->mParent;
+	while(pNode){
+			if(!pNode->mParent)
+				break; //root don't add
+			pLast = pLast->append(pNode);
+			length += strlen(pNode->mName) + 1;
+		
+			pNode = (FileNode*) pNode->mParent;
+		
 	}
-	if (length == 0) //is root
-		return NULL;
+
 	char* buffer = (char*)malloc(length);
 	char* p = buffer;
-	Link* lk = pLast;
+	Link* lk = pLast; //don't copy root name
 	while(lk ) {
-		FileNode* node = (FileNode*)lk->mData;
-		strcpy(p, node->getFileName());
+		pNode = (FileNode*)lk->mData;
+		strcpy(p, pNode->getFileName());
 		p += strlen(p);
 		if (lk != pFirst)
 			*p = '/';
 		p++;
 		lk = lk->mPrev;
+
 	}
 
 	delete pFirst;
@@ -177,20 +181,34 @@ void FileNode::print(int opt)
     for (int i=0; i< mDepth; i++)
         printf(" ");
 
-    if (opt) //long display        
+    if (opt==1) //long display        
     {
         struct tm* tc = localtime((time_t*)&mTime);
-		char* pName = getRelativePathName();
-        if(!mIsFolder){
-            printf("  %s\t %4d/%02d/%02d %02d:%02d:%02d %ldB\n", pName, tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
-                    tc->tm_hour, tc->tm_min, tc->tm_sec, mSize); 
-        }
-        else {
-            printf("+ %s\t  %4d/%02d/%02d %02d:%02d:%02d\n", pName, tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
-                    tc->tm_hour, tc->tm_min, tc->tm_sec);
-        }
+		char* pName = createRelativePathName();
+		if (pName) {
+	        if(!mIsFolder){
+				char unit[3] =" B";
+				long size = mSize;
+				if(size > 1024) { unit[0]='K'; size = size/1024; if (size>1024) {unit[0]='M'; size/= 1024;}}
+			
+	            printf("  %s\t %4d/%02d/%02d %02d:%02d:%02d %ld%s\n", pName, tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
+	                    tc->tm_hour, tc->tm_min, tc->tm_sec, size, unit); 
+	        }
+	        else {
+	            printf("+ %s\t  %4d/%02d/%02d %02d:%02d:%02d\n", pName, tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
+	                    tc->tm_hour, tc->tm_min, tc->tm_sec);
+	        }
 
-		free(pName);
+			free(pName);
+		}
+    } else if (opt ==2) { //no filename
+            struct tm* tc = localtime((time_t*)&mTime);
+			printf("\tdate: %4d/%02d/%02d %02d:%02d:%02d\n", tc->tm_year+1900, tc->tm_mon+1, tc->tm_mday,
+					tc->tm_hour, tc->tm_min, tc->tm_sec);
+			char unit[3] =" B";
+			long size = mSize;
+			if(size > 1024) { unit[0]='K'; size = size/1024; if (size>1024) {unit[0]='M'; size/= 1024;}}
+    		printf("\tsize: %ld%s\n", size, unit);
     }
     else
     {
@@ -217,16 +235,22 @@ FileNode* FileNode::appendChild(FileNode* node)
 {
     return (FileNode*) Tree::appendChild( node);
 }
-  
+
+/* search the FileNode in the tree has the relative name */
 FileNode* FileNode::search(const char* name)
 {
-	char* pName = getRelativePathName();
-	if (strcmp(name, pName) == 0){
+	//check if this node is hit
+	char* pName = createRelativePathName();
+	if (pName) {
+		if (strcmp(name, pName) == 0){
+			free(pName);
+			return this;
+		}
+
 		free(pName);
-		return this;
 	}
-	free(pName);
 	
+	//check other nodes
 	FileNode* fd = (FileNode*) mFirst;
 	 while (fd){
         FileNode* fd2 = fd->search(name);
@@ -239,39 +263,48 @@ FileNode* FileNode::search(const char* name)
 }
 void FileNode::compareAll(FileNode* refRoot, fnComapreCallBack fnCbk)
 {
+	if(-1 == compare(refRoot, fnCbk))
+		return;
+
 	FileNode* fd = (FileNode*) mFirst;
 	 while (fd){
-		fd->compare(refRoot, fnCbk);
+		fd->compareAll(refRoot, fnCbk);
         fd =(FileNode*)fd->mNext;
     }
+	
 
 }
-void FileNode::compare(FileNode* refRoot, fnComapreCallBack fnCbk)
+
+//return -1 if not similar
+//return 0 if the same or is folder
+//return 1 if is different
+int FileNode::compare(FileNode* refRoot, fnComapreCallBack fnCbk)
 {
-	FileNode* node = refRoot->search(getRelativePathName());
-	char* p1 = NULL;
-	char* p2 = NULL;
+	char* p1 = createRelativePathName();
+	if(!p1) //root
+		return 0;
+	
+	FileNode* node = refRoot->search(p1);
+	free(p1);
+
 	if (!node){
 		if(!isFolder()) {
-			p1 = getFilePathName();
-			fnCbk(p1, NULL, 1, 1); //this only in destination
-			free(p1);
+			fnCbk(this, NULL); //this only in destination
 		}
-		return;
+		return -1;
 	}
 
-	if ( isFolder())
-		return;
+	if ( isFolder()) {
+		return 0;
+	}
 	long tmDiff = mTime - node->mTime;
 	long sizeDiff = mSize -node->mSize;
 
 	if (tmDiff !=0 || sizeDiff !=0 ) {
-		p1 = getFilePathName();
-		p2 = node->getFilePathName();
-		fnCbk(p1, p2, tmDiff, sizeDiff);
-		if (p1) free(p1);
-		if (p2) free(p2);
+		fnCbk(this, node);
+		return 1;
 	}
+	return 0;
 
 }
 

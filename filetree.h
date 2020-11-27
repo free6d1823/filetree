@@ -2,12 +2,11 @@
 #define FILE_TREE_H
 
 #include "tree.h"
+class FileNode;
+typedef void (* fnComapreCallBack)(FileNode* candidate, FileNode* refference);
 
-typedef void (* fnComapreCallBack)(const char* file, const char* fileRef, long isNewer, long isLarger);
-
-class FileTree;
 class FileNode : public Tree{
-    friend FileTree;
+
 public:
     FileNode(const char* name, bool  isFolder=0, long time=0, long size=0);
     ~FileNode();
@@ -18,8 +17,8 @@ static FileNode* CreateRoot(const char* name);
     /* append a node after current child */
     FileNode* appendChild(FileNode* node);
  
-    char* getFilePathName();
-	char* getRelativePathName();
+    char* createFilePathName();
+	char* createRelativePathName();
     const char* getFileName();
     bool isFolder();
 	//expand childrens. don't do twice.
@@ -29,15 +28,16 @@ static FileNode* CreateRoot(const char* name);
     /* search first descendant meets the condition */
     FileNode* search(const char* name);
 	void compareAll(FileNode* refRoot, fnComapreCallBack fnCbk);
-	void compare(FileNode* refRoot, fnComapreCallBack fnCbk);
+	int compare(FileNode* refRoot, fnComapreCallBack fnCbk);
+    long mTime;
+    long mSize;	
 protected:
 
 private:
     bool  mIsFolder;    
     char* mName;
 
-    long mTime;
-    long mSize;
+
 };
 
 int stateFile(const char* path, bool* isDir, long* lastTime, long* fileSize);
